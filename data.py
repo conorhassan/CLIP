@@ -1,44 +1,80 @@
+import torch 
+from torchvision import transforms
+from torch.utils.data import IterableDataset, DataLoader
+
+from transformers import CLIPTokenizer
 from datasets import load_dataset
-import torchvision.transforms as T
-from transformers import AutoTokenizer
-import matplotlib.pyplot as plt
 
-def peek_at_batches(batch_size=5):
-    # Load dataset
-    dataset = load_dataset("eltorio/ROCOv2-radiology")  # replace with actual ROCO dataset
-    
-    # Basic transforms
-    transforms = T.Compose([
-        T.Resize((224, 224)),
-        T.ToTensor(),
-        T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
-    
-    tokenizer = AutoTokenizer.from_pretrained("microsoft/BiomedVLP-CXR-BERT-general")
-    
-    # Get a batch
-    batch = dataset['train'].select(range(batch_size))
-    
-    # Process and visualize
-    fig, axes = plt.subplots(1, batch_size, figsize=(20, 4))
-    
-    for i, item in enumerate(batch):
-        # Process image
-        img = transforms(item['image'].convert('RGB'))
-        # Denormalize for visualization
-        img = img * torch.tensor([0.229, 0.224, 0.225]).view(3,1,1) + torch.tensor([0.485, 0.456, 0.406]).view(3,1,1)
-        
-        # Process text
-        tokens = tokenizer(item['caption'], truncation=True, max_length=77)
-        
-        # Plot
-        axes[i].imshow(img.permute(1,2,0).clip(0, 1))
-        axes[i].axis('off')
-        axes[i].set_title(f"Tokens: {len(tokens['input_ids'])}", fontsize=8)
-        print(f"Caption {i}: {item['caption']}\n")
-    
-    plt.tight_layout()
-    plt.show()
+from PIL import Image
 
-# Use it
-peek_at_batches(5)
+class CLIPImageProcessor: 
+    def __init__(self):
+        self.transform = transforms.Compose([
+            transforms.Resize(224, interpolation=transforms.InterpolationMode.BICUBIC),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(
+                mean=[0.48145466, 0.4578275, 0.40821073],
+                std=[0.26862954, 0.26130258, 0.27577711]
+            )
+        ])
+
+    def __call__(self, image):
+        """
+        Args: 
+            image: PIL image or a list of PIL images
+        Returns: 
+            preprocessed image tensor
+        """
+        if isinstance(image, list):
+            return torch.stack([self.transform(img) for img in image])
+        else:
+            return self.transform(image)
+        
+class ClipStreamingDataset(IterableDataset):
+    def __init__(self, dataset, tokenizer, image_processor):
+        self.dataset = dataset
+        self.tokenizer = tokenizer
+        self.image_processor = image_processor
+
+    def __iter__(self):
+            for item in self.dataset:
+                image = item["image"]
+                if not isinstance(image, Image.Image): 
+                    image = Image.fromarray(image)
+
+                image_tensor = self.image_processor(image.convert("RGB"))
+
+                caption = item["caption"]
+                text_tokens = self.tokenizer(
+                    caption,
+                    padding='max_length',
+                    max_length=77,
+                    truncation=True,
+                    return_tensors='pt'
+                    )
+                    
+                yield {
+                    'pixel_values': image_tensor,
+                    'input_ids': text_tokens['input_ids'].squeeze(0)
+                }
+
+def create_streaming_clip_loader(
+    dataset="eltorio/ROCOv2-radiology", 
+    tokenizer=CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32"), 
+    image_processor=CLIPImageProcessor(), 
+    batch_size=8, 
+    num_workers=1, 
+    pin_memory=True, 
+    shuffle=False
+):
+    dataset = load_dataset(dataset, split="train", streaming=True)
+    ds = dataset.take(128)
+    dataset = ClipStreamingDataset(dataset, tokenizer, image_processor)
+    return DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, shuffle=shuffle)
+    
+if __name__ == "__main__":
+    loader = create_streaming_clip_loader()
+    for batch in loader:
+        print(batch)
+        break
