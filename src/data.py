@@ -48,28 +48,31 @@ class ClipStreamingDataset(IterableDataset):
                 caption = item["caption"]
                 text_tokens = self.tokenizer(
                     caption,
-                    padding='max_length',
+                    padding="max_length",
                     max_length=77,
                     truncation=True,
-                    return_tensors='pt'
+                    return_tensors="pt"
                     )
                     
                 yield {
                     'pixel_values': image_tensor,
-                    'input_ids': text_tokens['input_ids'].squeeze(0)
+                    'input_ids': text_tokens['input_ids'].squeeze(0), 
+                    "attention_mask": text_tokens['attention_mask'].squeeze(0)
                 }
 
 def create_streaming_clip_loader(
     dataset="eltorio/ROCOv2-radiology", 
     tokenizer=CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32"), 
     image_processor=CLIPImageProcessor(), 
-    batch_size=8, 
+    batch_size=128, 
     num_workers=1, 
     pin_memory=True, 
-    shuffle=False
+    shuffle=False, 
+    subset=1024
 ):
     dataset = load_dataset(dataset, split="train", streaming=True)
-    ds = dataset.take(128)
+    if subset != None: 
+        dataset = dataset.take(subset)
     dataset = ClipStreamingDataset(dataset, tokenizer, image_processor)
     return DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, shuffle=shuffle)
     
