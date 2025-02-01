@@ -4,7 +4,7 @@ from torch import nn, Tensor
 from einops import rearrange, repeat
 from typing import Union, Optional, Tuple
 from jaxtyping import Int, Float
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass 
 class TextConfig:
@@ -29,8 +29,8 @@ class VisionConfig:
 
 @dataclass
 class CLIPConfig:
-    text: TextConfig = TextConfig()
-    vision: VisionConfig = VisionConfig()
+    text: TextConfig = field(default_factory=TextConfig)
+    vision: VisionConfig = field(default_factory=VisionConfig)
     projection_dim: int = 512
 
 class CLIPModel(nn.Module):
@@ -106,7 +106,7 @@ class TextEmbedding(nn.Module):
         position_embed = self.position_embedding(position_ids)
         return token_embed + position_embed
     
-class VisionModel(nn.Model):
+class VisionModel(nn.Module):
     def __init__(
         self,
         config: VisionConfig
@@ -141,7 +141,8 @@ class VisionEmbedding(nn.Module):
             in_channels=config.in_channels, 
             out_channels=config.embedding_dim, 
             kernel_size=config.patch_size, 
-            stride=config.patch_size
+            stride=config.patch_size, 
+            bias=False
         )
         self.class_embedding = nn.Parameter(torch.randn(config.embedding_dim))
         self.position_embedding = nn.Embedding(config.num_positions, config.embedding_dim)

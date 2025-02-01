@@ -14,7 +14,7 @@ print("Caption: ", item['caption'])
 # Create transforms
 transform = T.Compose([
     T.Resize((224, 224)),  # Resize to standard size
-    T.ToTensor(),          # Convert to tensor
+    ToTensor(),          # Convert to tensor
     # Add any other transforms you want, e.g.:
     T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # ImageNet stats
 ])
