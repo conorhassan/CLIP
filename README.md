@@ -1,6 +1,19 @@
 ### **1. Training CLIP on a Medical Dataset**
 **Goal**: Build a domain-specific CLIP for radiology.
 
+#### Some useful stuff for the first GPU run: 
+**Code:** 
+- write trainer in pytorch lightning 
+- do cosine type schedule 
+- initialize the model with the pretrained weights from the huggingface model hub 
+- make sure that the validation at the end of the epoch is based on the predictive accuracy of the validation set - not the *loss* 
+
+Then train via distributed data parallel training. 
+- Use DistribuedSampler
+- Wrap model in DDP
+- Initialize process group
+- Synchronize batch norms if used
+
 #### **Key Steps**
 - **Data Preparation**:
   - **ROCOv2**: Verify image-caption alignment. Medical captions often include anatomical terms, pathologies, and imaging modalities—ensure the tokenizer captures these (e.g., extend `CLIPTokenizer`’s vocabulary if needed).
